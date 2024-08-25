@@ -2,7 +2,7 @@ import os
 import logging
 from pyrogram.raw.all import layer
 from pyrogram import Client, idle, __version__
-
+from pyrogram.dispatcher import yt-dlp
 from config import Config
 
 logging.basicConfig(
