@@ -66,28 +66,6 @@ async def youtube_dl_call_back(_bot, update):
                     length = entity.length
                     youtube_dl_url = youtube_dl_url[o: o + length]
 
-        # Cleaning up inputs
-        youtube_dl_url, custom_file_name, youtube_dl_username, youtube_dl_password = (
-            map(
-                str.strip,
-                [
-                    youtube_dl_url,
-                    custom_file_name,
-                    youtube_dl_username,
-                    youtube_dl_password,
-                ],
-            )
-        )
-
-    else:
-        for entity in update.message.reply_to_message.entities:
-            if entity.type == "text_link":
-                youtube_dl_url = entity.url
-            elif entity.type == "url":
-                o = entity.offset
-                length = entity.length
-                youtube_dl_url = youtube_dl_url[o: o + length]
-
     await update.message.edit_caption(
         caption=Translation.DOWNLOAD_START.format(custom_file_name)
     )
@@ -182,13 +160,24 @@ async def youtube_dl_call_back(_bot, update):
 
         end_one = datetime.now()
         time_taken_for_download = (end_one - start).seconds
-        file_size = Config.TG_MAX_FILE_SIZE + 1
 
         try:
-            file_size = os.stat(download_directory).st_size
+            # Check if file exists and get its size
+            if os.path.exists(download_directory):
+                file_size = os.stat(download_directory).st_size
+            else:
+                logger.debug(f"File not found, trying .mkv extension")
+                download_directory = os.path.splitext(download_directory)[0] + ".mkv"
+                if os.path.exists(download_directory):
+                    file_size = os.stat(download_directory).st_size
+                else:
+                    logger.error(f"File not found: {download_directory}")
+                    await update.message.edit(f"File not found: {download_directory}")
+                    return False
         except FileNotFoundError:
-            download_directory = os.path.splitext(download_directory)[0] + "." + "mkv"
-            file_size = os.stat(download_directory).st_size
+            logger.error(f"File not found: {download_directory}")
+            await update.message.edit(f"File not found: {download_directory}")
+            return False
 
         download_location = f"{Config.DOWNLOAD_LOCATION}/{update.from_user.id}.jpg"
         thumb = download_location if os.path.isfile(download_location) else None
@@ -266,14 +255,10 @@ async def youtube_dl_call_back(_bot, update):
 
             end_two = datetime.now()
             time_taken_for_upload = (end_two - end_one).seconds
-
+            logger.info(f"Downloaded in {time_taken_for_download}s. Uploaded in {time_taken_for_upload}s.")
+        try:
             shutil.rmtree(tmp_directory_for_each_user)
-
-            await update.message.edit_caption(
-                caption=Translation.AFTER_SUCCESSFUL_UPLOAD_MSG_WITH_TS.format(
-                    time_taken_for_download, time_taken_for_upload
-                )
-            )
-
-            logger.info("Downloaded in: %s", str(time_taken_for_download))
-            logger.info("Uploaded in: %s", str(time_taken_for_upload))
+        except Exception as e:
+            logger.error(f"Error while deleting directory: {e}")
+    else:
+        await update.message.edit_caption(text=Translation.NO_VOID_FORMAT_FOUND)
